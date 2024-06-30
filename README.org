@@ -1,3 +1,11 @@
 #+title: PiDust
 
 * Control Algorithm
+* Roadmap
+1. Add progress calculations
+2. Make web interface with progress bar
+3. Add alarm system with alarm/notification if doesn't find intersection in 2s
+4. Identify all fine-tuning parameters
+5. Make script to convert path grid map to json config
+6. Implement system to handle slanted lines with centroids still in the middle
+7. Minimum time delay after finding intersection
