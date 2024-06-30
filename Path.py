@@ -31,6 +31,7 @@ class Path:
         self.turn = self.nIntersections in self.turns
         if self.turn:
             self.turnCode = self.turns[self.nIntersections]
+            print(f"New turncode: {self.turnCode}")
 
     def loadConfig(self):
         """Generate the turns dictionary from the config file."""

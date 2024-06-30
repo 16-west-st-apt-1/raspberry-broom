@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from enum import Enum
+import cv2
 from PiDust import PiDust
 from picamera2 import Picamera2, Preview
 import RPi.GPIO as GPIO
@@ -37,11 +38,27 @@ def loadPiCam2():
     #time.sleep(2)
     #picam2.capture_file("test2.jpg")
 
+def camLiveFeed(cam, fps):
+    msDelay = int(1000 / fps)
+    while True:
+        image = cam.capture_array()
+        cv2.imshow("Image", image)
+        cv2.waitKey(msDelay) & 0xFF == ord("q")
+
+
 def main():
-    camera = loadPiCam2()
-    motors = initializeGPIO()
-    pidust = PiDust(camera, motors)
-    pidust.run()
+    try:
+        camera = loadPiCam2()
+        motors = initializeGPIO()
+        pidust = PiDust(camera, motors, 3)
+        pidust.run()
+
+        # Test video feed
+        # cv2.namedWindow("Image", cv2.WND_PROP_TOPMOST)  # Resizable window
+        # camLiveFeed(camera, 10)
+    except KeyboardInterrupt:
+        camera.stop()
+        GPIO.cleanup()  # Clean up GPIO settings
 
 
 if __name__ == "__main__":
