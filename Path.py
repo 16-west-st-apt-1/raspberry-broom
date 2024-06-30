@@ -23,6 +23,9 @@ class Path:
         # Turns dictionary
         self.turns: Dict[int:Turn] = self.loadConfig()
 
+        # Process config
+        # self.processConfig()
+
     def updateIntersection(self):
         self.nIntersections += 1
         self.turn = self.nIntersections in self.turns
@@ -33,3 +36,7 @@ class Path:
         """Generate the turns dictionary from the config file."""
         with open(self.configFile, "r") as f:
             return json.load(f)
+
+    # def processConfig(self):
+    #     """Process config file."""
+    #     for intersections, turn in

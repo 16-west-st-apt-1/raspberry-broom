@@ -2,13 +2,15 @@
 
 import cv2
 import numpy as np
-import sys
 from Path import Path
+import RPi.GPIO as GPIO
+import sys
+import time
 from Turn import Turn
 
 
 class PiDust:
-    def __init__(self):
+    def __init__(self, camera, motors):
         # Lines with this angle wrto horizontal are treated as horizontal lines.
         self.MAX_HORIZ_LINE_ANGLE = 20
 
@@ -19,8 +21,60 @@ class PiDust:
         self.LEFT_MARGIN: float = 0.15
         self.RIGHT_MARGIN: float = 1 - self.LEFT_MARGIN
 
+        # Baseline duty cycle for testing
+        self.TEST_BASE_DC = 25
+        self.baseSpeed = 25
+
         # Load Path
         self.path = Path()
+
+        # Store camera
+        self.cam = camera
+
+        # Store and start motors
+        self.leftMotor = motors["leftA"]
+        self.rightMotor = motors["rightA"]
+        self.startMotors()
+
+    def startMotors(self):
+        self.leftMotor.start(0)
+        self.rightMotor.start(0)
+
+    def setLeftMotorDutyCycle(self, dc):
+        self.leftMotor.ChangeDutyCycle(dc)
+
+    def setRightMotorDutyCycle(self, dc):
+        self.rightMotor.ChangeDutyCycle(dc)
+
+    def stopMotors(self):
+        self.setLeftMotorDutyCycle(0)
+        self.setRightMotorDutyCycle(0)
+
+    def go(self):
+        self.setLeftMotorDutyCycle(self.TEST_BASE_DC)
+        self.setRightMotorDutyCycle(self.TEST_BASE_DC)
+
+    def leftTurn(self):
+        """Turn left 90 degrees."""
+        print("Turning left.")
+        self.setLeftMotorDutyCycle(0)
+        time.sleep(2)
+        self.setLeftMotorDutyCycle(self.TEST_BASE_DC)
+
+    def rightTurn(self):
+        """Turn right 90 degrees."""
+        print("Turning right.")
+        self.setRightMotorDutyCycle(0)
+        time.sleep(2)
+        self.setRightMotorDutyCycle(self.TEST_BASE_DC)
+
+    def turn(self):
+        """Turn according to the turn type specified by Path."""
+        turn = self.path.turnCode
+        if turn == Turn.L:
+            self.leftTurn()
+        if turn == Turn.R:
+            self.rightTurn()
 
     def getImage(self, filepath):
         """Get an image from the camera."""
@@ -75,7 +129,7 @@ class PiDust:
 
         This requires some fine-tuning based on the distance between camera and the
         floor, the resolution, and the width and shapes of the lines being tracked."""
-        print("Checking for corners.")
+        # print("Checking for corners.")
         height, width = image.shape
 
         # Apply edge detection
@@ -91,60 +145,45 @@ class PiDust:
             maxLineGap=100,
         )
 
-        # Number of lines found
-        nHoughLines = len(lines)
-        # Number of lines representing intersection found
-        nIntersectionLines = 0
-
-        # Find lines
         if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                if self.isHorizontal(x1, y1, x2, y2):
-                    if self.isCloseToEdge(x1, x2, width):
-                        nIntersectionLines += 1
-                        if nIntersectionLines == 3:
-                            print("Found intersection.")
-                            return True
-                        # third: int = self.findVerticalThird(y1, height)
-                        # if third == 0:
-                        #     nIntersectionLines += 1
-                        #     if nIntersectionLines == 3:
-                        #         print("Found intersection in top third.")
-                        #         return True
-                        # if third == 1:
-                        #     nIntersectionLines += 1
-                        #     if nIntersectionLines == 3:
-                        #         print("Found intersection in middle third.")
-                        #         return True
-                        # if third == 2:
-                        #     nIntersectionLines += 1
-                        #     if nIntersectionLines == 3:
-                        #         print("Found intersection in bottom third.")
-                        #         return True
-            print("No intersection found.")
-            return False
-        else:
-            print("No intersection found.")
-            return False
+            # Number of lines found
+            nHoughLines = len(lines)
+            # Number of lines representing intersection found
+            nIntersectionLines = 0
 
-    def leftTurn(self):
-        """Turn left 90 degrees."""
-        print("Turning left.")
-        pass
-
-    def rightTurn(self):
-        """Turn right 90 degrees."""
-        print("Turning right.")
-        pass
-
-    def turn(self):
-        """Turn according to the turn type specified by Path."""
-        turn = self.path.turnCode
-        if turn == Turn.L:
-            self.leftTurn()
-        if turn == Turn.R:
-            self.rightTurn()
+            # Find lines
+            if lines is not None:
+                for line in lines:
+                    x1, y1, x2, y2 = line[0]
+                    if self.isHorizontal(x1, y1, x2, y2):
+                        if self.isCloseToEdge(x1, x2, width):
+                            nIntersectionLines += 1
+                            if nIntersectionLines == 3:
+                                print("Found intersection.")
+                                return True
+                            # third: int = self.findVerticalThird(y1, height)
+                            # if third == 0:
+                            #     nIntersectionLines += 1
+                            #     if nIntersectionLines == 3:
+                            #         print("Found intersection in top third.")
+                            #         return True
+                            # if third == 1:
+                            #     nIntersectionLines += 1
+                            #     if nIntersectionLines == 3:
+                            #         print("Found intersection in middle third.")
+                            #         return True
+                            # if third == 2:
+                            #     nIntersectionLines += 1
+                            #     if nIntersectionLines == 3:
+                            #         print("Found intersection in bottom third.")
+                            #         return True
+                # print("No intersection found.")
+                return False
+            else:
+                # print("No intersection found.")
+                return False
+        print("No lines found.")
+        return False
 
     def handleIntersection(self):
         """Handle what to do at an intersection.
@@ -157,29 +196,50 @@ class PiDust:
         must stop and pivot, as opposed to turning while moving.
         """
         if self.path.turn:
-            # stop()
+            printing("Turning")
+            self.stopMotors()
             self.turn()
-            # go()
+            self.go()
         else:
             pass
+
+    def setRightMotorSpeed(self, multiplier):
+        currentSpeed = self.baseSpeed * 1.25 * multiplier
+
+    def setLeftMotorSpeed(self, multiplier):
+        currentSpeed = self.baseSpeed * 1.25 * multiplier
 
     def updateDirection(self, image, original):
         """Update the robot's direction given the orientation of the black line.
 
         Detect contours of black area, find centroid, and update motor speed.
         """
-        print("Updating direction.")
+        # print("Updating direction.")
         contours, hierarchy = cv2.findContours(image.copy(), 1, cv2.CHAIN_APPROX_NONE)
 
+        halfWidth = image.shape[1] / 2
+
         if len(contours) > 0:
-            # Find largest contour area and image moments
+            # Find largest contour area and its image moments
             c = max(contours, key=cv2.contourArea)
             M = cv2.moments(c)
 
-            # Find x-axis centroid using image moments
+            # Find x-coordinate of the centroid using image moments
             cx = int(M["m10"] / M["m00"])
 
-    def showAndWait(self, image, title="Image"):
+        error = cx - halfWidth
+        normalizedError = abs(error) / halfWidth
+        if cx > halfWidth: # Line on the right
+            rightMotorMultiplier = 1 + normalizedError
+            leftMotorMultiplier = 1 - normalizedError
+        else:
+            rightMotorMultiplier = 1 - normalizedError
+            leftMotorMultiplier = 1 + normalizedError
+
+        self.setRightMotorSpeed(rightMotorMultiplier)
+        self.setLeftMotorSpeed(leftMotorMultiplier)
+
+    def cvShowAndWait(self, image, title="Image"):
         """Show an image with cv2, wait for keypress "q", and close the window."""
         cv2.namedWindow(title, cv2.WINDOW_NORMAL)  # Resizable window
         cv2.imshow(title, image)
@@ -188,28 +248,21 @@ class PiDust:
                 cv2.destroyAllWindows()
                 break
 
-    def drawXLineAndShowAndWait(self, image, xcoord):
-        """Draw a line at an x-coordinate on an image, and show it.
-        The image is copied before drawing the line."""
-        copy = image.copy()
-        start_point = (xcoord, 0)
-        end_point = (xcoord, image.shape[0])
-        color = (0, 255, 0)  # green
-        thickness = 3
-        cv2.line(copy, start_point, end_point, color, thickness)
-        showAndWait(copy)
-
     def run(self):
-        # Parse args
-        inputImage = sys.argv[1]
+        try:
+            while True:
+                self.go()
 
-        rawImage = self.getImage(inputImage)
+                # print("Getting image")
+                # Get image from PiCam2
+                rawImage = self.cam.capture_array()
+                img = self.preprocess(rawImage)
 
-        img = self.preprocess(rawImage)
+                if self.findIntersection(img):
+                    self.path.updateIntersection()
+                    self.handleIntersection()
 
-        if self.findIntersection(img):
-            self.path.updateIntersection()
-            self.handleIntersection()
-
-        # updateDirection(img, rawImage)
-        # sleep(0.1)
+                self.updateDirection(img, rawImage)
+                time.sleep(0.2)
+        except KeyboardInterrupt:
+            GPIO.cleanup()  # Clean up GPIO settings
