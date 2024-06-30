@@ -25,6 +25,9 @@ class PiDust:
         self.TEST_BASE_DC = 25
         self.baseSpeed = 25
 
+        # Time between taking a new image
+        self.PROCESS_TIME = 0.2
+
         # Load Path
         self.path = Path()
 
@@ -229,7 +232,7 @@ class PiDust:
 
         error = cx - halfWidth
         normalizedError = abs(error) / halfWidth
-        if cx > halfWidth: # Line on the right
+        if cx > halfWidth:  # Line on the right
             rightMotorMultiplier = 1 + normalizedError
             leftMotorMultiplier = 1 - normalizedError
         else:
@@ -253,16 +256,19 @@ class PiDust:
             while True:
                 self.go()
 
-                # print("Getting image")
-                # Get image from PiCam2
+                # Take photo with PiCam2
                 rawImage = self.cam.capture_array()
                 img = self.preprocess(rawImage)
 
+                # Find intersections
                 if self.findIntersection(img):
                     self.path.updateIntersection()
                     self.handleIntersection()
 
+                # Update direction
                 self.updateDirection(img, rawImage)
-                time.sleep(0.2)
+
+                # Allow processing time before repeating
+                time.sleep(self.PROCESS_TIME)
         except KeyboardInterrupt:
             GPIO.cleanup()  # Clean up GPIO settings
