@@ -9,7 +9,7 @@ import time
 from Turn import Turn
 
 
-class PiDust:
+class RaspberryBroom:
     def __init__(self, camera, motors, fps=3):
         # Lines with this angle wrto horizontal are treated as horizontal lines.
         self.MAX_HORIZ_LINE_ANGLE = 20
