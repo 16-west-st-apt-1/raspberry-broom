@@ -54,8 +54,8 @@ def main():
     try:
         camera = loadPiCam2()
         motors = initializeGPIO()
-        pidust = RaspberryBroom(camera, motors, 3)
-        pidust.run()
+        rb = RaspberryBroom(camera, motors, 3)
+        rb.run()
 
         # Test video feed
         # cv2.namedWindow("Image", cv2.WND_PROP_TOPMOST)  # Resizable window

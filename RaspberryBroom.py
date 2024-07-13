@@ -8,18 +8,20 @@ import sys
 import time
 from Turn import Turn
 
+np.set_printoptions(threshold=np.inf)
+
 
 class RaspberryBroom:
     def __init__(self, camera, motors, fps=3):
         # Lines with this angle wrto horizontal are treated as horizontal lines.
-        self.MAX_HORIZ_LINE_ANGLE = 20
+        # self.MAX_HORIZ_LINE_ANGLE = 20
 
         # Minimum length of lines found with HoughLinesP transform.
-        self.MIN_LINE_LENGTH = 100
+        # self.MIN_LINE_LENGTH = 100
 
         # Horizontal lines should be within these margin percentages of the image.
-        self.LEFT_MARGIN: float = 0.15
-        self.RIGHT_MARGIN: float = 1 - self.LEFT_MARGIN
+        # self.LEFT_MARGIN: float = 0.15
+        # self.RIGHT_MARGIN: float = 1 - self.LEFT_MARGIN
 
         # Baseline duty cycle for testing
         self.TEST_BASE_DC = 30
@@ -36,6 +38,7 @@ class RaspberryBroom:
         # Store camera
         self.cam = camera
         self.setUpLiveStream(fps)
+        self.BINARY_THRESHOLD = 150
 
         # Store and start motors
         self.leftMotor = motors["leftA"]
@@ -132,39 +135,40 @@ class RaspberryBroom:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         ret, thresh1 = cv2.threshold(blur, 100, 255, cv2.THRESH_BINARY_INV)
+        resized = cv2.resize(thresh1, [24, 18])
 
         # Erode to eliminate noise, and dilate to restore eroded parts of image
         # mask = cv2.erode(thresh1, None, iterations=2)
         # mask = cv2.dilate(mask, None, iterations=2)
-        return thresh1
+        return resized
 
-    def isHorizontal(self, x1, y1, x2, y2) -> bool:
-        lineAngle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
-        return (
-            np.abs(lineAngle) < self.MAX_HORIZ_LINE_ANGLE
-            or np.abs(lineAngle - 180) < self.MAX_HORIZ_LINE_ANGLE
-        )
+    # def isHorizontal(self, x1, y1, x2, y2) -> bool:
+    #     lineAngle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+    #     return (
+    #         np.abs(lineAngle) < self.MAX_HORIZ_LINE_ANGLE
+    #         or np.abs(lineAngle - 180) < self.MAX_HORIZ_LINE_ANGLE
+    #     )
 
-    def isCloseToEdge(self, x1, x2, width) -> bool:
-        """Is a line close enough to either vertical edge of the image?"""
-        return x1 < width * self.LEFT_MARGIN or x2 > width * self.RIGHT_MARGIN
+    # def isCloseToEdge(self, x1, x2, width) -> bool:
+    #     """Is a line close enough to either vertical edge of the image?"""
+    #     return x1 < width * self.LEFT_MARGIN or x2 > width * self.RIGHT_MARGIN
 
-    def findVerticalThird(self, y1: int, height: int) -> int:
-        """Return int representing which third of image height y-coord is in.
+    # def findVerticalThird(self, y1: int, height: int) -> int:
+    #     """Return int representing which third of image height y-coord is in.
 
-        0: top
-        1: middle
-        2: bottom
-        """
-        top = 0.15 * height
-        middle = 0.75 * height
+    #     0: top
+    #     1: middle
+    #     2: bottom
+    #     """
+    #     top = 0.15 * height
+    #     middle = 0.75 * height
 
-        if y1 < top:
-            return 0
-        elif y1 >= top and y1 <= middle:
-            return 1
-        else:
-            return 2
+    #     if y1 < top:
+    #         return 0
+    #     elif y1 >= top and y1 <= middle:
+    #         return 1
+    #     else:
+    #         return 2
 
     def findIntersection(self, image):
         """Detect if an image is at a corner.
@@ -255,7 +259,45 @@ class RaspberryBroom:
         else:
             pass
 
-    def updateDirection(self, image, original, livestream=False):
+    def updateDirection(self, image: list[list], original, livestream=False):
+        """Update the robot's direction given the orientation of the black line.
+
+        Compute column average of row average of position-weighted brightness of
+        each row: C = sum(R) / height Use C to update direction.
+
+        Recall that image is a list with length height, and with sublists of
+        length width."""
+        # print("Updating direction.")
+
+        # self.cvShowAndWait(image)
+
+        height, width = image.shape
+        self.cvShowAndWait(image)
+
+        # print(f"Image dimensions: {height}, {width}")
+        positionArray = np.arange(0, width, 1)
+
+        # Find avg position of white pixels
+        rowWhiteAvgPosn = []
+        for row in image:
+            rowBrightnessNormalized = row / np.sum(row)
+            rowWhiteAvgPosn.append(
+                round(np.inner(positionArray, rowBrightnessNormalized))
+            )
+        print(f"Average position of white in row: { rowWhiteAvgPosn }")
+
+        colWhiteAvgPosn = np.average(rowWhiteAvgPosn)
+        delta: float = abs(colWhiteAvgPosn - width / 2)
+        deltaPct = (delta / width / 2) * 100
+        print(f"Average position of white: { colWhiteAvgPosn }")
+        print(f"Delta: {delta}")
+        print(f"Delta pct: {deltaPct}")
+        print(f"Width: {width}")
+
+        if delta < 5:
+            print("Not updating direction")
+
+    def _updateDirection(self, image, original, livestream=False):
         """Update the robot's direction given the orientation of the black line.
 
         Detect contours of black area, find centroid, and update motor speed.
@@ -329,7 +371,9 @@ class RaspberryBroom:
                 crop = self.crop(rawImage)
                 img = self.preprocess(crop)
 
-                self.cvShowAndWait(img)
+                self.updateDirection(img, rawImage)
+
+                # self.cvShowAndWait(img)
 
                 # Find intersections
                 # if self.findIntersection(img):
