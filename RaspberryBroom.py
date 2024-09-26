@@ -30,15 +30,16 @@ class RaspberryBroom:
         self.TURN_TIME = 0.5
 
         # Time between taking a new image
-        self.PROCESS_TIME = 0.2
+        self.PROCESS_TIME = 2
 
         # Load Path
         self.path = Path()
 
         # Store camera
         self.cam = camera
-        self.setUpLiveStream(fps)
+        # self.setUpLiveStream(fps)
         self.BINARY_THRESHOLD = 150
+        self.RESIZE_DIMS = [48, 36]
 
         # Store and start motors
         self.leftMotor = motors["leftA"]
@@ -133,13 +134,16 @@ class RaspberryBroom:
 
         # Gray, blur, and threshold >100 -> black
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        ret, thresh1 = cv2.threshold(blur, 100, 255, cv2.THRESH_BINARY_INV)
-        resized = cv2.resize(thresh1, [24, 18])
+        # self.cvShowAndWait(gray)
+        # blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        ret, thresh = cv2.threshold(gray, self.BINARY_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
+        # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        #                                 cv2.THRESH_BINARY_INV, 3, 0)
 
         # Erode to eliminate noise, and dilate to restore eroded parts of image
-        # mask = cv2.erode(thresh1, None, iterations=2)
-        # mask = cv2.dilate(mask, None, iterations=2)
+        mask = cv2.dilate(thresh, None, iterations=2)
+        mask = cv2.erode(mask, None, iterations=2)
+        resized = cv2.resize(mask, self.RESIZE_DIMS)
         return resized
 
     # def isHorizontal(self, x1, y1, x2, y2) -> bool:
@@ -272,7 +276,6 @@ class RaspberryBroom:
         # self.cvShowAndWait(image)
 
         height, width = image.shape
-        self.cvShowAndWait(image)
 
         # print(f"Image dimensions: {height}, {width}")
         positionArray = np.arange(0, width, 1)
@@ -280,22 +283,34 @@ class RaspberryBroom:
         # Find avg position of white pixels
         rowWhiteAvgPosn = []
         for row in image:
-            rowBrightnessNormalized = row / np.sum(row)
-            rowWhiteAvgPosn.append(
-                round(np.inner(positionArray, rowBrightnessNormalized))
-            )
-        print(f"Average position of white in row: { rowWhiteAvgPosn }")
+            # print(row)
+            rowSum = np.sum(row)
+            if rowSum != 0:
+                # Divide each pixel's brightness by the sum of the rows' pixel's
+                # brightness
+                rowBrightnessNormalized = row / rowSum
+                rowWhiteAvgPosn.append(np.inner(positionArray, rowBrightnessNormalized))
+        # print(f"Average position of white in row: { rowWhiteAvgPosn }")
 
         colWhiteAvgPosn = np.average(rowWhiteAvgPosn)
-        delta: float = abs(colWhiteAvgPosn - width / 2)
-        deltaPct = (delta / width / 2) * 100
-        print(f"Average position of white: { colWhiteAvgPosn }")
-        print(f"Delta: {delta}")
-        print(f"Delta pct: {deltaPct}")
-        print(f"Width: {width}")
+        error: float = colWhiteAvgPosn - width / 2
+        errorPct = (abs(error) / width / 2)
+        print(f"Average position of white: {round(colWhiteAvgPosn)}")
+        print(f"Delta: {round(error)}")
+        print(f"Delta pct: {round(errorPct)}")
+        # print(f"Width: {width}")
 
-        if delta < 5:
-            print("Not updating direction")
+        newLeftSpeed = self.baseSpeed * (1-errorPct)
+        newRightSpeed = self.baseSpeed * (1+errorPct)
+
+        # self.setLeftMotorSpeed(newLeftSpeed)
+        # self.setRightMotorSpeed(newRightSpeed)
+
+
+        # self.setLeftMotorSpeed(self.baseSpeed - (error * kp))
+        # self.setRightMotorSpeed(self.baseSpeed + (error * kp))
+
+
 
     def _updateDirection(self, image, original, livestream=False):
         """Update the robot's direction given the orientation of the black line.
@@ -363,13 +378,17 @@ class RaspberryBroom:
 
     def run(self):
         try:
+            print(80 * "=")
+            # print("Going!")
             # self.go()
             # Primary event loop
             while True:
                 # Take photo with PiCam2
                 rawImage = self.cam.capture_array()
-                crop = self.crop(rawImage)
-                img = self.preprocess(crop)
+                # self.cvShowAndWait(rawImage)
+                # crop = self.crop(rawImage)
+                img = self.preprocess(rawImage)
+                self.cvShowAndWait(img)
 
                 self.updateDirection(img, rawImage)
 
@@ -384,7 +403,7 @@ class RaspberryBroom:
                 # self.updateDirection(img, crop)
 
                 # Allow processing time before repeating
-                # time.sleep(self.PROCESS_TIME)
+                time.sleep(self.PROCESS_TIME)
         except KeyboardInterrupt:
             self.cam.stop()
             GPIO.cleanup()  # Clean up GPIO settings

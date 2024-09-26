@@ -2,7 +2,7 @@
 
 * Control Algorithm
 * Roadmap
-1. Real-time viewing of photo
+1. Real-time viewing of photo with centroid drawn
 2. Minimum time delay after finding intersection
 3. Implement system to handle slanted lines with centroids still in the middle
 4. Add progress calculations

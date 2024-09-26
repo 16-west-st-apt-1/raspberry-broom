@@ -1,0 +1,16 @@
+Only compute row brightness if row brightness is >0
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch brightness-avg
+# Your branch is ahead of 'origin/brightness-avg' by 1 commit.
+#   (use "git push" to publish your local commits)
+#
+# Changes to be committed:
+#	modified:   RaspberryBroom.py
+#
+# Changes not staged for commit:
+#	modified:   README.org
+#	modified:   RaspberryBroom.py
+#
